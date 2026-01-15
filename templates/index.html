@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>名片文字辨識系統</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .preview-image {
+            max-width: 300px;
+            max-height: 300px;
+            margin: 10px 0;
+        }
+        .history-item {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .history-image {
+            max-width: 200px;
+            max-height: 200px;
+            margin: 5px 0;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .history-image:hover {
+            transform: scale(1.05);
+        }
+        .loading {
+            display: none;
+            margin: 20px 0;
+        }
+        .error-message {
+            color: red;
+            margin: 10px 0;
+        }
+        .custom-btn {
+            background-color: rgb(144, 179, 75) !important;
+            border-color: rgb(144, 179, 75) !important;
+            color: white !important;
+        }
+        .custom-btn:hover {
+            background-color: rgb(124, 159, 55) !important;
+            border-color: rgb(124, 159, 55) !important;
+        }
+        .copy-btn {
+            display: none;
+            margin-top: 10px;
+        }
+        .image-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            overflow: auto;
+        }
+        .modal-content {
+            margin: auto;
+            display: block;
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            object-fit: contain;
+        }
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1001;
+        }
+        .editable {
+            border: 1px solid transparent;
+            padding: 2px 4px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .editable:hover {
+            border-color: #ddd;
+            background-color: #f8f9fa;
+        }
+        .editable:focus {
+            border-color: rgb(144, 179, 75);
+            background-color: #fff;
+            outline: none;
+        }
+        .save-status {
+            display: none;
+            color: rgb(144, 179, 75);
+            font-size: 0.8em;
+            margin-left: 5px;
+        }
+        .delete-btn {
+            color: #6c757d;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.2s;
+            opacity: 0.7;
+        }
+        .delete-btn:hover {
+            color: #495057;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">名片文字辨識系統</h1>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">上傳名片圖片</h5>
+                        <form id="uploadForm" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <input type="file" class="form-control" id="fileInput" accept="image/*" required>
+                            </div>
+                            <button type="submit" class="btn custom-btn">開始辨識</button>
+                        </form>
+                        
+                        <div id="preview" class="mt-3">
+                            <img id="previewImage" class="preview-image d-none">
+                        </div>
+                        
+                        <div id="loading" class="loading text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">處理中...</span>
+                            </div>
+                            <p class="mt-2">正在處理圖片，請稍候...</p>
+                        </div>
+                        
+                        <div id="error" class="error-message"></div>
+                        
+                        <div id="result" class="mt-3">
+                            <h5>辨識結果：</h5>
+                            <div class="analyzed-result mb-3">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-2">
+                                            <strong>單位名稱：</strong>
+                                            <span id="companyName" class="editable" contenteditable="true" data-field="company"></span>
+                                        </div>
+                                        <div class="mb-2">
+                                            <strong>姓名：</strong>
+                                            <span id="personName" class="editable" contenteditable="true" data-field="name"></span>
+                                        </div>
+                                        <div class="mb-2">
+                                            <strong>地址：</strong>
+                                            <span id="address" class="editable" contenteditable="true" data-field="address"></span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-2">
+                                            <strong>電話：</strong>
+                                            <span id="phone" class="editable" contenteditable="true" data-field="phone"></span>
+                                        </div>
+                                        <div class="mb-2">
+                                            <strong>電子郵件：</strong>
+                                            <span id="email" class="editable" contenteditable="true" data-field="email"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <strong>備註：</strong>
+                                    <pre id="notes" class="editable bg-light p-2 rounded" contenteditable="true" data-field="notes"></pre>
+                                </div>
+                            </div>
+                            <h5>原始文字：</h5>
+                            <pre id="resultText" class="bg-light p-3 rounded"></pre>
+                            <button id="copyButton" class="btn custom-btn copy-btn" onclick="copyResult()">複製結果</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title mb-0">歷史記錄</h5>
+                            <button class="btn custom-btn" onclick="exportCSV()">
+                                <i class="fas fa-file-export me-1"></i>匯出結果
+                            </button>
+                        </div>
+                        <div id="history"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 圖片放大模態框 -->
+    <div id="imageModal" class="image-modal">
+        <span class="close-modal" onclick="closeModal()">&times;</span>
+        <img class="modal-content" id="modalImage">
+    </div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewImage = document.getElementById('previewImage');
+                    previewImage.src = e.target.result;
+                    previewImage.classList.remove('d-none');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 新增編輯相關的函數
+        let currentTimestamp = null;
+        let editTimeout = null;
+
+        function makeEditable(element) {
+            element.addEventListener('input', function() {
+                clearTimeout(editTimeout);
+                editTimeout = setTimeout(() => {
+                    saveEdits();
+                }, 1000);
+            });
+        }
+
+        function saveEdits() {
+            if (!currentTimestamp) return;
+            
+            const analyzed = {
+                company: document.getElementById('companyName').textContent,
+                name: document.getElementById('personName').textContent,
+                address: document.getElementById('address').textContent,
+                phone: document.getElementById('phone').textContent,
+                email: document.getElementById('email').textContent,
+                notes: document.getElementById('notes').textContent
+            };
+            
+            fetch('/update_result', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    timestamp: currentTimestamp,
+                    analyzed: analyzed
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const status = document.createElement('span');
+                    status.className = 'save-status';
+                    status.textContent = '已儲存';
+                    document.querySelector('.analyzed-result').appendChild(status);
+                    setTimeout(() => {
+                        status.remove();
+                    }, 2000);
+                }
+            })
+            .catch(error => console.error('儲存失敗：', error));
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('fileInput');
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const resultText = document.getElementById('resultText');
+            const copyButton = document.getElementById('copyButton');
+            
+            // 清空分析結果
+            document.getElementById('companyName').textContent = '';
+            document.getElementById('personName').textContent = '';
+            document.getElementById('address').textContent = '';
+            document.getElementById('phone').textContent = '';
+            document.getElementById('email').textContent = '';
+            document.getElementById('notes').textContent = '';
+            
+            if (!fileInput.files[0]) {
+                error.textContent = '請選擇一個檔案';
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            loading.style.display = 'block';
+            error.textContent = '';
+            resultText.textContent = '';
+            copyButton.style.display = 'none';
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // 顯示原始文字
+                    resultText.textContent = data.text;
+                    
+                    // 顯示分析結果
+                    const analyzed = data.analyzed;
+                    document.getElementById('companyName').textContent = analyzed.company || '未識別';
+                    document.getElementById('personName').textContent = analyzed.name || '未識別';
+                    document.getElementById('address').textContent = analyzed.address || '未識別';
+                    document.getElementById('phone').textContent = analyzed.phone || '未識別';
+                    document.getElementById('email').textContent = analyzed.email || '未識別';
+                    document.getElementById('notes').textContent = analyzed.notes || '無';
+                    
+                    // 設定當前時間戳記
+                    currentTimestamp = data.timestamp;
+                    
+                    // 啟用編輯功能
+                    document.querySelectorAll('.editable').forEach(makeEditable);
+                    
+                    copyButton.style.display = 'block';
+                    loadHistory();
+                } else {
+                    error.textContent = data.error || '處理失敗';
+                }
+            } catch (err) {
+                error.textContent = '上傳失敗：' + err.message;
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+
+        function copyResult() {
+            const resultText = document.getElementById('resultText').textContent;
+            navigator.clipboard.writeText(resultText).then(() => {
+                const copyButton = document.getElementById('copyButton');
+                const originalText = copyButton.textContent;
+                copyButton.textContent = '已複製！';
+                setTimeout(() => {
+                    copyButton.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('複製失敗：', err);
+            });
+        }
+
+        function openModal(imageSrc) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modal.style.display = "block";
+            modalImg.src = imageSrc;
+        }
+
+        function closeModal() {
+            document.getElementById('imageModal').style.display = "none";
+        }
+
+        // 點擊模態框外部時關閉
+        window.onclick = function(event) {
+            const modal = document.getElementById('imageModal');
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetch('/results');
+                const results = await response.json();
+                
+                const historyDiv = document.getElementById('history');
+                historyDiv.innerHTML = '';
+                
+                results.reverse().forEach(result => {
+                    const item = document.createElement('div');
+                    item.className = 'history-item';
+                    
+                    const date = new Date(result.timestamp).toLocaleString('zh-TW');
+                    const filename = result.filename || '未命名檔案';
+                    const analyzed = result.analyzed || {};
+                    
+                    let content = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <small class="text-muted">${date}</small>
+                                <small class="text-muted ms-2">${filename}</small>
+                            </div>
+                            <i class="fas fa-trash-alt delete-btn" onclick="deleteResult('${result.timestamp}')" title="刪除此筆記錄"></i>
+                        </div>
+                        <div class="analyzed-content">
+                            <div class="mb-1">
+                                <strong>單位名稱：</strong>
+                                <span class="editable" contenteditable="true" data-field="company">${analyzed.company || '未識別'}</span>
+                            </div>
+                            <div class="mb-1">
+                                <strong>姓名：</strong>
+                                <span class="editable" contenteditable="true" data-field="name">${analyzed.name || '未識別'}</span>
+                            </div>
+                            <div class="mb-1">
+                                <strong>地址：</strong>
+                                <span class="editable" contenteditable="true" data-field="address">${analyzed.address || '未識別'}</span>
+                            </div>
+                            <div class="mb-1">
+                                <strong>電話：</strong>
+                                <span class="editable" contenteditable="true" data-field="phone">${analyzed.phone || '未識別'}</span>
+                            </div>
+                            <div class="mb-1">
+                                <strong>電子郵件：</strong>
+                                <span class="editable" contenteditable="true" data-field="email">${analyzed.email || '未識別'}</span>
+                            </div>
+                            <div class="mb-1">
+                                <strong>備註：</strong>
+                                <pre class="editable d-inline-block mb-0" contenteditable="true" data-field="notes">${analyzed.notes || '無'}</pre>
+                            </div>
+                        </div>
+                    `;
+                    
+                    if (result.image) {
+                        content += `<img src="data:image/png;base64,${result.image}" class="history-image" onclick="openModal(this.src)">`;
+                    }
+                    
+                    item.innerHTML = content;
+                    
+                    // 為歷史記錄中的可編輯元素添加事件監聽器
+                    item.querySelectorAll('.editable').forEach(element => {
+                        element.addEventListener('input', function() {
+                            clearTimeout(editTimeout);
+                            editTimeout = setTimeout(() => {
+                                const analyzed = {
+                                    company: item.querySelector('[data-field="company"]').textContent,
+                                    name: item.querySelector('[data-field="name"]').textContent,
+                                    address: item.querySelector('[data-field="address"]').textContent,
+                                    phone: item.querySelector('[data-field="phone"]').textContent,
+                                    email: item.querySelector('[data-field="email"]').textContent,
+                                    notes: item.querySelector('[data-field="notes"]').textContent
+                                };
+                                
+                                fetch('/update_result', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        timestamp: result.timestamp,
+                                        analyzed: analyzed
+                                    })
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        const status = document.createElement('span');
+                                        status.className = 'save-status';
+                                        status.textContent = '已儲存';
+                                        item.querySelector('.analyzed-content').appendChild(status);
+                                        setTimeout(() => {
+                                            status.remove();
+                                        }, 2000);
+                                    }
+                                })
+                                .catch(error => console.error('儲存失敗：', error));
+                            }, 1000);
+                        });
+                    });
+                    
+                    historyDiv.appendChild(item);
+                });
+            } catch (err) {
+                console.error('載入歷史記錄失敗：', err);
+            }
+        }
+
+        // 頁面載入時載入歷史記錄
+        loadHistory();
+    </script>
+    <script>
+        async function deleteResult(timestamp) {
+            if (!confirm('確定要刪除此筆記錄嗎？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/delete_result', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ timestamp: timestamp })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 重新載入歷史記錄
+                    loadHistory();
+                } else {
+                    alert('刪除失敗：' + (data.error || '未知錯誤'));
+                }
+            } catch (err) {
+                console.error('刪除失敗：', err);
+                alert('刪除失敗：' + err.message);
+            }
+        }
+    </script>
+    <script>
+        async function exportCSV() {
+            try {
+                // 使用 window.location.href 來觸發下載
+                window.location.href = '/export_csv';
+            } catch (err) {
+                console.error('匯出失敗：', err);
+                alert('匯出失敗：' + err.message);
+            }
+        }
+    </script>
+</body>
+</html> 
